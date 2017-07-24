@@ -148,6 +148,6 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 				commit["newdatetime"].replace(tzinfo = None)
 			)
 		cmd = "'%s'" % s
-		cmd = re.compile("'\s+(?=\S)").sub("", cmd)
-		cmd = re.compile("(?!\S)\s+(?=')").sub("", cmd)
-		self.git.repo.git.filter_branch('-f', '--env-filter', cmd)
+		cmd = re.compile("(?<=')\s+(?=\S)").sub("", cmd)
+		cmd = re.compile("(?<=\S)\s+(?=')").sub("", cmd)
+		self.git.repo.git.filter_branch("-f", "--env-filter \\\n", cmd)
