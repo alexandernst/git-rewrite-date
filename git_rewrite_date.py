@@ -38,10 +38,14 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 			avatar = "http://gravatar.com/avatar/%s?s=%spx" % (hashlib.md5(commit.author.email.encode('utf-8')).hexdigest(), image_height)
 
 			if avatar not in images_cache:
-				images_cache[avatar] = urllib.request.urlopen(avatar).read()
+				try:
+					images_cache[avatar] = urllib.request.urlopen(avatar).read()
+				except Exception as e:
+					images_cache[avatar] = None
 
 			pixmap = QtGui.QPixmap()
-			pixmap.loadFromData(images_cache[avatar])
+			if images_cache[avatar] is not None:
+				pixmap.loadFromData(images_cache[avatar])
 			img_label =  QtWidgets.QLabel()
 			img_label.setPixmap(pixmap)
 
@@ -78,7 +82,7 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 			self.commit_datetime.append({
 				"hash": commit.hexsha,
 				"datetime": commit.authored_datetime,
-				"newdatetime": commit.authored_datetime
+				"newdatetime": None
 			})
 
 		self.commits.resizeColumnsToContents()
@@ -89,7 +93,7 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		self.selectors.show()
 		self.current_selected_row = row
 
-		newdatetime = self.commit_datetime[row]["newdatetime"]
+		newdatetime = self.commit_datetime[row]["datetime"]
 
 		self.date.blockSignals(True)
 		self.date.setSelectedDate(newdatetime)
@@ -100,7 +104,7 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		self.time.blockSignals(False)
 
 	def date_changed(self, date):
-		newdatetime = self.commit_datetime[self.current_selected_row]["newdatetime"].replace(
+		newdatetime = self.commit_datetime[self.current_selected_row]["datetime"].replace(
 			year = date.year(),
 			month = date.month(),
 			day = date.day()
@@ -109,10 +113,10 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		self.update_datetime_cell()
 
 	def time_changed(self, time):
-		newdatetime = self.commit_datetime[self.current_selected_row]["newdatetime"].replace(
+		newdatetime = self.commit_datetime[self.current_selected_row]["datetime"].replace(
 			hour = time.hour(),
 			minute = time.minute(),
-			secound = time.secound()
+			second = time.second()
 		)
 		self.commit_datetime[self.current_selected_row]["newdatetime"] = newdatetime
 		self.update_datetime_cell()
@@ -127,4 +131,21 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		label.setText("%s" % newdatetime)
 
 	def rewrite(self, foo):
-		print("do stuff!")
+		# https://github.com/gitpython-developers/GitPython/issues/406
+
+		tpl = """
+			if test $GIT_COMMIT = "%s"; then
+				export GIT_AUTHOR_DATE="%s"
+				export GIT_COMMITTER_DATE="%s"
+			fi
+		"""
+
+		s = ""
+		for commit in filter(lambda x: x["newdatetime"] is not None, self.commit_datetime):
+			s += tpl % (
+				commit["hash"],
+				commit["newdatetime"].replace(tzinfo = None),
+				commit["newdatetime"].replace(tzinfo = None)
+			)
+		cmd = "'%s'" % s
+		self.git.repo.git.filter_branch('-f', '--env-filter', cmd)
