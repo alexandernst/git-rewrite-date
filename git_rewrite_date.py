@@ -1,6 +1,6 @@
 from PyQt5 import QtGui, QtWidgets, QtCore, uic
 from my_git import *
-import hashlib, urllib.request
+import hashlib, urllib.request, re
 
 class GitRewriteDate(QtWidgets.QMainWindow):
 	def __init__(self):
@@ -148,4 +148,6 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 				commit["newdatetime"].replace(tzinfo = None)
 			)
 		cmd = "'%s'" % s
+		cmd = re.compile("'\s+(?=\S)").sub("", cmd)
+		cmd = re.compile("(?!\S)\s+(?=')").sub("", cmd)
 		self.git.repo.git.filter_branch('-f', '--env-filter', cmd)
