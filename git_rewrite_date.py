@@ -1,6 +1,6 @@
 from PyQt5 import QtGui, QtWidgets, QtCore, uic
 from my_git import *
-import hashlib, urllib.request, re
+import hashlib, urllib.request
 
 class GitRewriteDate(QtWidgets.QMainWindow):
 	def __init__(self):
@@ -19,22 +19,26 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		self.path.setText(path)
 
 	def load_branches(self, path):
-		self.git = MyGit(path)
-		if(self.git.is_valid()):
+		self.mygit = MyGit(path)
+		if self.mygit.is_valid():
 			self.branches.clear()
-			self.branches.addItems(map(lambda v: v.name, self.git.repo.branches))
+			self.branches.addItems(map(lambda v: v.name, self.mygit.repo.branches))
 		else:
 			print("Invalid repo")
 
+		if not self.mygit.is_clean():
+			print("Dirty repo")
+
+
 	def load_commits(self, branch):
-		self.commits.setRowCount(len(list(self.git.repo.iter_commits(branch))))
+		self.commits.setRowCount(len(list(self.mygit.repo.iter_commits(branch))))
 		self.commits.setColumnCount(3)
 
 		image_height = 40
 		images_cache = {}
 
 		#author, authored_datetime, message, hexsha
-		for idx, commit in enumerate(self.git.repo.iter_commits(branch)):
+		for idx, commit in enumerate(self.mygit.repo.iter_commits(branch)):
 			avatar = "http://gravatar.com/avatar/%s?s=%spx" % (hashlib.md5(commit.author.email.encode('utf-8')).hexdigest(), image_height)
 
 			if avatar not in images_cache:
@@ -130,24 +134,9 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		label.setPalette(palette)
 		label.setText("%s" % newdatetime)
 
+	def update_statusbar(self, data):
+		print(data)
+
 	def rewrite(self, foo):
-		# https://github.com/gitpython-developers/GitPython/issues/406
-
-		tpl = """
-			if test $GIT_COMMIT = "%s"; then
-				export GIT_AUTHOR_DATE="%s"
-				export GIT_COMMITTER_DATE="%s"
-			fi
-		"""
-
-		s = ""
-		for commit in filter(lambda x: x["newdatetime"] is not None, self.commit_datetime):
-			s += tpl % (
-				commit["hash"],
-				commit["newdatetime"].replace(tzinfo = None),
-				commit["newdatetime"].replace(tzinfo = None)
-			)
-		cmd = "'%s'" % s
-		cmd = re.compile("(?<=')\s+(?=\S)").sub("", cmd)
-		cmd = re.compile("(?<=\S)\s+(?=')").sub("", cmd)
-		self.git.repo.git.filter_branch("-f", "--env-filter \\\n", cmd)
+		commits = filter(lambda x: x["newdatetime"] is not None, self.commit_datetime)
+		self.mygit.rewrite_dates(commits, self.update_statusbar)
