@@ -81,9 +81,11 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 			self.commits.setCellWidget(idx, 1, widget)
 
 			widget = QtWidgets.QWidget()
+			widget.setObjectName("dates_holder")
 			newlabel =  QtWidgets.QLabel("")
 			newlabel.setObjectName("newdatetime")
 			label =  QtWidgets.QLabel("%s" % commit.authored_datetime)
+			label.setObjectName("datetime")
 			layout = QtWidgets.QVBoxLayout()
 			layout.addWidget(newlabel)
 			layout.addWidget(label)
@@ -150,5 +152,13 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		commits = filter(lambda x: x["newdatetime"] is not None, self.commit_datetime)
 		self.mygit.rewrite_dates(commits, self.update_statusbar)
 
-		self.statusbar.clearMessage()
-		#TODO clear UI
+		# Clear UI
+		self.update_statusbar("")
+		layouts = self.commits.findChildren(QtWidgets.QWidget, "dates_holder", QtCore.Qt.FindChildrenRecursively)
+		for layout in layouts:
+			newlabel = layout.findChild(QtWidgets.QLabel, "newdatetime")
+			newdate = newlabel.text()
+			if newdate is not "":
+				label = layout.findChild(QtWidgets.QLabel, "datetime")
+				label.setText(newdate)
+				newlabel.setText("")
