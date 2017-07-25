@@ -30,9 +30,8 @@ class MyGit():
 	def is_valid(self):
 		return self.repo != None
 
-	def is_clean(self):
-		#TODO
-		return True
+	def is_dirty(self):
+		return self.repo.is_dirty()
 
 	def rewrite_dates(self, commits, cb):
 		tpl = """
