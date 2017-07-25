@@ -1,11 +1,13 @@
 import git
-from git import Git, Repo
 import os, re, io
+from git import Git, Repo
+from threading import Thread
+from PyQt5.QtCore import pyqtSignal, QObject
 
 class PipeIO(io.BytesIO):
-	def __init__(self, cb):
+	def __init__(self, updater_cb):
 		io.BytesIO.__init__(self)
-		self.updater_cb = cb
+		self.updater_cb = updater_cb
 
 	def write(self, b):
 		buf = io.BytesIO.getbuffer(self).tobytes()
@@ -18,8 +20,13 @@ class PipeIO(io.BytesIO):
 
 		return io.BytesIO.write(self, b)
 
-class MyGit():
+class MyGit(QObject):
+	updated = pyqtSignal(str)
+	finished = pyqtSignal()
+
 	def __init__(self, path):
+		QObject.__init__(self)
+
 		try:
 			self.repo = Repo(path)
 		except git.exc.NoSuchPathError as e:
@@ -33,7 +40,10 @@ class MyGit():
 	def is_dirty(self):
 		return self.repo.is_dirty()
 
-	def rewrite_dates(self, commits, cb):
+	def updater_cb(self, data):
+		self.updated.emit(data)
+
+	def rewrite_dates(self, commits):
 		tpl = """
 		if [ "$GIT_COMMIT" == "%s" ]; then
 			export GIT_AUTHOR_DATE="%s"
@@ -41,7 +51,7 @@ class MyGit():
 		fi
 		"""
 
-		stdout = PipeIO(cb)
+		stdout = PipeIO(self.updater_cb)
 
 		s = ""
 		for commit in commits:
@@ -50,4 +60,8 @@ class MyGit():
 				commit["newdatetime"].replace(tzinfo = None),
 				commit["newdatetime"].replace(tzinfo = None)
 			)
-		self.repo.git.filter_branch("-f", "--env-filter", s, output_stream = stdout) #, max_chunk_size = 30)
+
+		thread = Thread(target = self.repo.git.filter_branch, args = ("-f", "--env-filter", s), kwargs = {"output_stream": stdout}) #, max_chunk_size = 30)
+		thread.start()
+		thread.join()
+		self.finished.emit()

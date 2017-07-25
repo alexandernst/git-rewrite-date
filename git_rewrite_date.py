@@ -1,5 +1,6 @@
 from PyQt5 import QtGui, QtWidgets, QtCore, uic
 from my_git import *
+from threading import Thread
 import hashlib, urllib.request
 
 class GitRewriteDate(QtWidgets.QMainWindow):
@@ -22,6 +23,12 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		pathDialog = QtWidgets.QFileDialog()
 		path = str(pathDialog.getExistingDirectory(caption = "Select git directory"))
 
+		try:
+			self.mygit.updated.disconnect()
+			self.mygit.finished.disconnect()
+		except Exception as e:
+			pass
+
 		self.mygit = MyGit(path)
 		if not self.mygit.is_valid():
 			QtWidgets.QMessageBox.information(self, "Informacion", "This folder doesn't seem to contain a git repository.", QtWidgets.QMessageBox.Ok)
@@ -30,6 +37,9 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		if self.mygit.is_dirty():
 			QtWidgets.QMessageBox.information(self, "Informacion", "This repository seems to be dirty. Maybe you have unstaged changes?", QtWidgets.QMessageBox.Ok)
 			return
+
+		self.mygit.updated.connect(self.update_statusbar)
+		self.mygit.finished.connect(self.clean_ui)
 
 		self.path.setText(path)
 
@@ -103,7 +113,6 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		self.commits.resizeRowsToContents()
 
 	def show_selectors(self, row, col):
-		print(self.commit_datetime[row])
 		self.selectors.show()
 		self.current_selected_row = row
 
@@ -148,11 +157,7 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		label = self.statusbar.findChild(QtWidgets.QLabel, "progress_label")
 		label.setText(data)
 
-	def rewrite(self, foo):
-		commits = filter(lambda x: x["newdatetime"] is not None, self.commit_datetime)
-		self.mygit.rewrite_dates(commits, self.update_statusbar)
-
-		# Clear UI
+	def clean_ui(self):
 		self.update_statusbar("")
 		layouts = self.commits.findChildren(QtWidgets.QWidget, "dates_holder", QtCore.Qt.FindChildrenRecursively)
 		for layout in layouts:
@@ -162,3 +167,16 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 				label = layout.findChild(QtWidgets.QLabel, "datetime")
 				label.setText(newdate)
 				newlabel.setText("")
+
+		for commit in self.commit_datetime:
+			if commit["newdatetime"] is not None:
+				commit["datetime"] = commit["newdatetime"]
+				commit["newdatetime"] = None
+
+	def rewrite(self):
+		def _do(commits):
+			self.mygit.rewrite_dates(commits)
+
+		commits = filter(lambda x: x["newdatetime"] is not None, self.commit_datetime)
+		thread = Thread(target = _do, args = (commits,))
+		thread.start()
