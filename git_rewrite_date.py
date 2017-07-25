@@ -10,25 +10,33 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		self.splitter.setStretchFactor(1, 0)
 		self.selectors.hide()
 
+		label = QtWidgets.QLabel()
+		label.setObjectName("progress_label")
+		self.statusbar.addWidget(label)
+
 		self.commit_datetime = []
 		self.current_selected_row = -1
+
 
 	def path_selector_dialog(self, clicked):
 		pathDialog = QtWidgets.QFileDialog()
 		path = str(pathDialog.getExistingDirectory(caption = "Select git directory"))
+
+		self.mygit = MyGit(path)
+		if not self.mygit.is_valid():
+			QtWidgets.QMessageBox.information(self, "Informacion", "This folder doesn't seem to contain a git repository.", QtWidgets.QMessageBox.Ok)
+			return
+
+		if self.mygit.is_dirty():
+			QtWidgets.QMessageBox.information(self, "Informacion", "This repository seems to be dirty. Maybe you have unstaged changes?", QtWidgets.QMessageBox.Ok)
+			return
+
 		self.path.setText(path)
 
+
 	def load_branches(self, path):
-		self.mygit = MyGit(path)
-		if self.mygit.is_valid():
-			self.branches.clear()
-			self.branches.addItems(map(lambda v: v.name, self.mygit.repo.branches))
-		else:
-			print("Invalid repo")
-
-		if not self.mygit.is_clean():
-			print("Dirty repo")
-
+		self.branches.clear()
+		self.branches.addItems(map(lambda v: v.name, self.mygit.repo.branches))
 
 	def load_commits(self, branch):
 		self.commits.setRowCount(len(list(self.mygit.repo.iter_commits(branch))))
@@ -135,8 +143,12 @@ class GitRewriteDate(QtWidgets.QMainWindow):
 		label.setText("%s" % newdatetime)
 
 	def update_statusbar(self, data):
-		print(data)
+		label = self.statusbar.findChild(QtWidgets.QLabel, "progress_label")
+		label.setText(data)
 
 	def rewrite(self, foo):
 		commits = filter(lambda x: x["newdatetime"] is not None, self.commit_datetime)
 		self.mygit.rewrite_dates(commits, self.update_statusbar)
+
+		self.statusbar.clearMessage()
+		#TODO clear UI
