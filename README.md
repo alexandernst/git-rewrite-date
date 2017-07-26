@@ -1,4 +1,4 @@
-This tool will let you change the authored/commited date of a git repo.
+This tool will let you change the authored/commited date of the commits in a git repo.
 
 In order to use it you will need
 
